@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Backblaze B2</string>
+    <string name="prefs_key">com.gyozo.backblazeb2.prefs_key</string>
+</resources>
