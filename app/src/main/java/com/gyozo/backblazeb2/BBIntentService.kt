@@ -10,18 +10,15 @@ import android.os.ResultReceiver
 import android.provider.OpenableColumns
 import android.util.Base64
 import androidx.core.app.NotificationCompat
-import java.net.HttpURLConnection
-import java.security.MessageDigest
-import java.util.*
-import java.net.URL
 import org.json.JSONObject
 import java.io.*
-import java.nio.charset.Charset
-import java.lang.Exception
+import java.net.HttpURLConnection
+import java.net.URL
 import java.net.URLEncoder
-import android.util.Log
+import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
-import kotlin.collections.ArrayList
+import java.security.MessageDigest
+import java.util.*
 
 /**
  * An [IntentService] subclass for handling asynchronous task requests in
@@ -34,13 +31,15 @@ class BBIntentService : IntentService("BBIntentService") {
     //parameters, received once
     private lateinit var appKeyId : String
     private lateinit var appKey : String
-    private lateinit var bucketId : String
+    private lateinit var bucketName : String
     private lateinit var filePath: String
     private lateinit var fileUrls : ArrayList<Uri>
 
     //variables calculated once
     private lateinit var authToken : String
     private lateinit var apiUrl : String
+    private lateinit var accountId: String
+    private lateinit var bucketId : String
     private var uploadToken: String? = null
     private var uploadUrl: String? = null
 
@@ -59,7 +58,7 @@ class BBIntentService : IntentService("BBIntentService") {
                 fileUrls = intent.getParcelableArrayListExtra<Uri>(FileUrl)
                 appKeyId = intent.getStringExtra(AppKeyId)
                 appKey = intent.getStringExtra(AppKey)
-                bucketId = intent.getStringExtra(BucketIdKey)
+                bucketName = intent.getStringExtra(BucketNameKey)
                 filePath = intent.getStringExtra(FilePath)
                 resultReceiver = intent.getParcelableExtra(ReceiverKey) as ResultReceiver;
                 handleUpload();
@@ -93,8 +92,10 @@ class BBIntentService : IntentService("BBIntentService") {
     private fun handleUpload() {
         putForegroundNotification()
 
-        sendResult("Authenticating");
+        sendResult("Authenticating")
         b2Auth()
+
+        bucketId = getBucketId(bucketName)
 
         var allSuccess = true;
         for (file in fileUrls) {
@@ -187,10 +188,11 @@ class BBIntentService : IntentService("BBIntentService") {
 
         try {
             urlConnection.inputStream.use { inputStream ->
-                val respStr = ReadInputStream(inputStream);
-                val response = JSONObject(respStr);
-                authToken = response.getString("authorizationToken");
-                apiUrl = response.getString("apiUrl");
+                val respStr = ReadInputStream(inputStream)
+                val response = JSONObject(respStr)
+                authToken = response.getString("authorizationToken")
+                apiUrl = response.getString("apiUrl")
+                accountId = response.getString("accountId")
             }
         } finally {
             urlConnection.disconnect()
@@ -231,6 +233,40 @@ class BBIntentService : IntentService("BBIntentService") {
         }
 
         return true;
+    }
+
+    fun getBucketId(name: String) : String {
+
+        val postJson = JSONObject()
+        postJson.put("accountId", accountId)
+        postJson.put("bucketName", name);
+        var postDataBytes =  postJson.toString().toByteArray();
+
+        var connection: HttpURLConnection? = null
+        try {
+            val url = URL("$apiUrl/b2api/v2/b2_list_buckets")
+            connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "POST"
+            connection!!.setRequestProperty("Authorization", authToken)
+            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+            //connection.setRequestProperty("charset", "utf-8")
+            connection.setRequestProperty("Content-Length", postDataBytes.size.toString())
+            connection.doOutput = true
+
+            connection.outputStream.write(postDataBytes)
+
+            val jsonResponse: String = ReadInputStream(connection.inputStream)
+            val json = JSONObject(jsonResponse)
+            val bucket =  json.getJSONArray("buckets").get(0) as JSONObject;
+            return bucket.getString("bucketId")
+        } catch (e: Exception) {
+            e.printStackTrace()
+            val jsonResponse: String = ReadInputStream(connection!!.errorStream)
+            println(jsonResponse)
+            return ""
+        } finally {
+            connection!!.disconnect()
+        }
     }
 
     fun b2UploadFile() : Boolean {
@@ -303,12 +339,12 @@ class BBIntentService : IntentService("BBIntentService") {
         const val FileUrl = "com.gyozo.backblazeb2.extra.FileUrl"
         const val AppKeyId = "com.gyozo.backblazeb2.extra.AppKeyId"
         const val AppKey = "com.gyozo.backblazeb2.extra.AppKey"
-        const val BucketIdKey = "com.gyozo.backblazeb2.extra.BucketIdKey"
+        const val BucketNameKey = "com.gyozo.backblazeb2.extra.BucketNameKey"
         const val FilePath = "com.gyozo.backblazeb2.extra.FilePath"
 
         const val ResultCode = 1
         const val ResultStatusKey = "status"
-        const val ReceiverKey = "com.gyozo.backblazeb2.extra.BucketIdKey,receiver"
+        const val ReceiverKey = "com.gyozo.backblazeb2.extra.ReceiverKey,receiver"
 
         const val NotificationId = 1
 

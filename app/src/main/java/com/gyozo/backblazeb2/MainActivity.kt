@@ -12,20 +12,22 @@ import com.gyozo.backblazeb2.BBIntentService.Companion.ACTION_UPLOAD
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.*
+import android.widget.Button
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var textAppKeyId : TextView
     private lateinit var textAppKey : TextView
-    private lateinit var textBucketId : TextView
+    private lateinit var textBucketName : TextView
     private lateinit var txtFilePath : TextView
     private lateinit var txtResult : TextView
+    private lateinit var btnUpload : Button
 
     private lateinit var appKeyId : String
     private lateinit var appKey : String
-    private lateinit var bucketId : String
+    private lateinit var bucketName : String
     private lateinit var filePath : String
-
+    private lateinit var fileUrls: ArrayList<Uri>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,35 +35,40 @@ class MainActivity : AppCompatActivity() {
 
         textAppKeyId = findViewById<TextView>(R.id.txtAppId)
         textAppKey = findViewById<TextView>(R.id.txtAppKey)
-        textBucketId = findViewById<TextView>(R.id.txtBucketId)
+        textBucketName = findViewById<TextView>(R.id.txtBucketName)
         txtFilePath = findViewById<TextView>(R.id.txtFilePath)
         txtResult = findViewById<TextView>(R.id.txtResult)
-
+        btnUpload = findViewById<Button>(R.id.btnUpload)
         readSettings()
 
         if (intent.action == ACTION_MAIN)
         {
+            btnUpload.isEnabled = false
         } else if (intent.action == ACTION_SEND) {
             val uri = intent.getParcelableExtra<Parcelable>(Intent.EXTRA_STREAM) as? Uri
 
             if (uri != null && !appKeyId.isNullOrEmpty() && !appKey.isNullOrEmpty()) {
                 var uriArray = ArrayList<Uri>()
                 uriArray.add(uri)
-                startBBService(uriArray)
+                fileUrls = uriArray
+                txtResult.text = "Press upload to start uploading ${fileUrls.size} files"
+                btnUpload.isEnabled = true
             }
 
         } else if (intent.action == ACTION_SEND_MULTIPLE) {
             val urls = intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM);
 
             if (urls != null && !appKeyId.isNullOrEmpty() && !appKey.isNullOrEmpty()) {
-                startBBService(urls)
+                fileUrls = urls
+                txtResult.text = "Press upload to start uploading ${fileUrls.size} files"
+                btnUpload.isEnabled = true
             }
 
         }
 
     }
 
-    fun startBBService(uriArray: ArrayList<Uri>) {
+    fun startBBService(view: View) {
 
         if (!isInternetAvailable()) {
             AlertDialog.Builder(this)
@@ -77,10 +84,10 @@ class MainActivity : AppCompatActivity() {
         intent.action = ACTION_UPLOAD
         intent.putExtra(BBIntentService.AppKeyId, appKeyId)
         intent.putExtra(BBIntentService.AppKey, appKey)
-        intent.putExtra(BBIntentService.BucketIdKey, bucketId)
+        intent.putExtra(BBIntentService.BucketNameKey, bucketName)
         intent.putExtra(BBIntentService.FilePath, filePath)
 
-        intent.putParcelableArrayListExtra(BBIntentService.FileUrl, uriArray)
+        intent.putParcelableArrayListExtra(BBIntentService.FileUrl, fileUrls)
 
         val rr = MyResultReceiver(null)
         intent.putExtra(BBIntentService.ReceiverKey, rr)
@@ -119,14 +126,14 @@ class MainActivity : AppCompatActivity() {
     fun saveSettings(view: View) {
         appKeyId = textAppKeyId!!.text.toString().trim()
         appKey = textAppKey!!.text.toString().trim()
-        bucketId = textBucketId!!.text.toString().trim()
+        bucketName = textBucketName!!.text.toString().trim()
         filePath = txtFilePath.text.toString().trim()
 
         val sharedPref = getSharedPreferences(getString(R.string.prefs_key), Context.MODE_PRIVATE);
         with (sharedPref.edit()) {
             putString(Pref_ApplicationKeyId, appKeyId)
             putString(Pref_ApplicationKey, appKey)
-            putString(Pref_BucketId, bucketId)
+            putString(Pref_BucketName, bucketName)
             putString(Pref_FilePath, filePath)
             commit()
         }
@@ -136,12 +143,12 @@ class MainActivity : AppCompatActivity() {
         val sharedPref = getSharedPreferences(getString(R.string.prefs_key), Context.MODE_PRIVATE);
         textAppKeyId.text = sharedPref.getString(Pref_ApplicationKeyId, "")
         textAppKey.text = sharedPref.getString(Pref_ApplicationKey, "")
-        textBucketId.text = sharedPref.getString(Pref_BucketId, "")
+        textBucketName.text = sharedPref.getString(Pref_BucketName, "")
         txtFilePath.text = sharedPref.getString(Pref_FilePath, "")
 
         appKeyId = textAppKeyId.text.toString()
         appKey = textAppKey.text.toString()
-        bucketId = textBucketId.text.toString()
+        bucketName = textBucketName.text.toString()
         filePath = txtFilePath.text.toString()
     }
 
@@ -152,7 +159,6 @@ class MainActivity : AppCompatActivity() {
             if (resultCode == BBIntentService.ResultCode && resultData != null) {
                 val resultMessage = resultData.getString(BBIntentService.ResultStatusKey, "")
                 txtResult.post({
-                    txtResult.visibility = View.VISIBLE;
                     txtResult.text = resultMessage;
                 })
 
@@ -168,7 +174,7 @@ class MainActivity : AppCompatActivity() {
 
         const val Pref_ApplicationKeyId = "Pref_ApplicationKeyId"
         const val Pref_ApplicationKey = "Pref_ApplicationKey"
-        const val Pref_BucketId = "Pref_BucketId"
+        const val Pref_BucketName = "Pref_BucketName"
         const val Pref_FilePath = "Pref_FilePath"
 
     }
